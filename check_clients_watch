@@ -9,9 +9,10 @@
 
 #Vars
 PERFDAT=""
-IPRange=$1;
 NIGHTSTART=0000
 NIGHTEND=0300
+SUBNET=""
+SUBNETNAME=""
 
 #For Clients who cant get resolved over DNS
 NO_DNS="3(NXDOMAIN)"
@@ -20,51 +21,75 @@ NO_DNS="3(NXDOMAIN)"
 TIME_WATCH=$(date "+%H%M")
 
 #START for Clients who are Online at Night from NIGHTSTART to NIGHTEND (NIGHTSTART_Default: 00:00 AM = 0000)
-if [ -n "$3" ]; then
-NIGHTSTART=$3
-fi
+#if [ -n "$3" ]; then
+#NIGHTSTART=$3
+#fi
 
 #Limit for Clients who are Online at Night from NIGHTSTART to NIGHTEND (NIGHTEND_Default: 03:00 AM = 0300)
-if [ -n "$4" ]; then
-NIGHTEND=$4
-fi 
+#if [ -n "$4" ]; then
+#NIGHTEND=$4
+#fi 
 
-#Check if the file /tmp/nighthosts_$2.txt exists
-if [ ! -f /tmp/nighthosts_$2.txt ]; then
-touch /tmp/nighthosts_$2.txt
-fi
 
 #Function for Printing Helptext
 function print_help {
 echo
 echo "check_client_watch usage:"
 echo
-echo "./check_client_watch [IP-SUBNET] [SUBNETNAME] [NIGHTSTART] [NIGHTEND]"
+echo "./check_client_watch --net [IP-SUBNET] --name [SUBNETNAME] --start [NIGHTSTART] --end [NIGHTEND]"
 echo
 echo "~~~DESCRIPTION~~~"
 echo
-echo "IP-SUBNETZ: range of subnet to ping in CIDR-Format e.g. 192.168.1.0/24 *REQUIRED*"
-echo "SUBNETNAME: Name of Subnet e.g. CLIENTS or WLAN *REQUIRED*"
-echo "NIGHTSTART: Time where the Nightwatch will start DEFAULT=0000 (00:00 AM) *OPTIONAL*"
-echo "NIGHTEND  : Time where the Nightwatch will end DEFAULT=0300 (03:00 AM) *OPTIONAL*"
-echo "help      : will print this Help"
+echo "--net	: range of subnet to ping in CIDR-Format e.g. 192.168.1.0/24 *REQUIRED*"
+echo "--name	: Name of Subnet e.g. CLIENTS or WLAN *REQUIRED*"
+echo "--start	: Time where the Nightwatch will start DEFAULT=0000 (00:00 AM) *OPTIONAL*"
+echo "--end	: Time where the Nightwatch will end DEFAULT=0300 (03:00 AM) *OPTIONAL*"
+echo "--help      : will print this Help"
 echo
 echo "EXAMPLE:"
-echo "./check_client_watch 192.168.1.0/24 Clients 0000 0300"
+echo "./check_client_watch --net 192.168.1.0/24 --name Clients --start 0000 --end 0300"
 echo
 exit 0
 }
 
-#Print Help
-if [[ -z "$1" ]] || [[ "$1" == "help" ]] || [[ -z "$2" ]]; then
- print_help
+
+#check script parameters
+for ((i=1;i<=$#;i++));
+
+do
+ if [ ${!i} = "--net" ]
+ 	then ((i++))
+		SUBNET=${!i};
+ elif [ ${!i} = "--name" ]
+	then ((i++))
+		SUBNETNAME=${!i};
+ elif [ ${!i} = "--start" ]
+	then ((i++))
+		NIGHTSTART=${!i};
+ elif [ ${!i} = "--end" ]
+	then ((i++))
+		NIGHTEND=${!i};
+ elif [ ${!i} = "--help" ]
+	then ((i++))
+		print_help
+fi
+done
+
+#Check if the file /tmp/nighthosts_$2.txt exists
+if [ ! -f /tmp/nighthosts_$SUBNETNAME.txt ]; then
+touch /tmp/nighthosts_$SUBNETNAME.txt
 fi
 
+#Print Help
+#if [[ -z "$1" ]] || [[ "$1" == "help" ]] || [[ -z "$2" ]]; then
+# print_help
+#fi
+
 #Ping Subnet in $1 and output all Online Client on /tmp/check_fing_$2.txt
-fping -a -g $1 -q -r 1 > /tmp/check_client_watch_$2.txt
+fping -a -g $SUBNET -q -r 1 > /tmp/check_client_watch_$SUBNETNAME.txt
 
 #Count Lines of /tmp/check_client_watch_$2.txt
-OnlineClientsCount=$(cat /tmp/check_client_watch_$2.txt | wc -l )
+OnlineClientsCount=$(cat /tmp/check_client_watch_$SUBNETNAME.txt | wc -l )
 PERFDAT="Online_Clients=$OnlineClientsCount;"
 
 
@@ -72,11 +97,11 @@ PERFDAT="Online_Clients=$OnlineClientsCount;"
 # This Check will be active form NIGHTSTART to NIGHTEND default is 00:00 - 03:00 AM (0000 <= 0300)
 # and will output it in /tmp/nighthosts_$2.txt
 if [[ $TIME_WATCH -le $NIGHTEND ]] && [[ $TIME_WATCH -ge $NIGHTSTART ]]; then
-echo > /tmp/nighthosts_$2.txt
+echo > /tmp/nighthosts_$SUBNETNAME.txt
 fi
 
 #Get all Clients form from fping
-cat /tmp/check_client_watch_$2.txt | while read LINE
+cat /tmp/check_client_watch_$SUBNETNAME.txt | while read LINE
  do
   line_hostename=""
   line_hostname=$(host $LINE | awk '{print $5}')
@@ -86,23 +111,23 @@ cat /tmp/check_client_watch_$2.txt | while read LINE
  if [ $line_hostname =  $NO_DNS ]; then
 
   #echo $LINE
-  echo $LINE >>  /tmp/nighthosts_$2.txt
+  echo $LINE >>  /tmp/nighthosts_$SUBNETNAME.txt
  else
 
    #echo $line_hostname
-   echo $line_hostname >> /tmp/nighthosts_$2.txt
+   echo $line_hostname >> /tmp/nighthosts_$SUBNETNAME.txt
 
 fi
 fi
 done
 #Count Clients Online at night minus 1
 #Because one line in /tmp/nighthosts_$2.txt is empty
-NightClientsCount=$(expr $(cat /tmp/nighthosts_$2.txt | wc -l) - 1)
+NightClientsCount=$(expr $(cat /tmp/nighthosts_$SUBNETNAME.txt | wc -l) - 1)
  
 echo -----------------------------------------
 echo ---------CLIENTS ONLINE AT NIGHT---------
 echo -----------------------------------------
-cat /tmp/nighthosts_$2.txt
+cat /tmp/nighthosts_$SUBNETNAME.txt
 echo
 echo -----------------------------------------
 echo $NightClientsCount "clients online at night"
@@ -112,5 +137,4 @@ echo -----------------------------------------
 echo $OnlineClientsCount  "clients are online | $PERFDAT";
 
 exit 0
-
 
