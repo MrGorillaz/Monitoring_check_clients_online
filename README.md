@@ -13,6 +13,6 @@ It will also displayed all Clients that wore online in a specific time period
 
 PerformanceData will be stored for Graphite/Grafana use.
 
-#!!! fping is requierd !!!
+#!!! fping is required !!!
 
 testet on Icinga2 @ Ubuntu 14.04
