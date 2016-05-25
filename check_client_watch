@@ -1,0 +1,116 @@
+#!/bin/bash
+
+#DATE: 25.05.2016
+#Author: Alexander Orlowski
+#Description:
+#This Plugin will output all Clients of a Subnet which are current online
+#It will also displayed all Clients that wore online in a specific time period
+#PerformanceData will be stored for Graphite/Grafana use.
+
+#Vars
+PERFDAT=""
+IPRange=$1;
+NIGHTSTART=0000
+NIGHTEND=0300
+
+#For Clients who cant get resolved over DNS
+NO_DNS="3(NXDOMAIN)"
+
+#Get Time in Format HHMM e.g  1500 = 15:00 PM
+TIME_WATCH=$(date "+%H%M")
+
+#START for Clients who are Online at Night from NIGHTSTART to NIGHTEND (NIGHTSTART_Default: 00:00 AM = 0000)
+if [ -n "$3" ]; then
+NIGHTSTART=$3
+fi
+
+#Limit for Clients who are Online at Night from NIGHTSTART to NIGHTEND (NIGHTEND_Default: 03:00 AM = 0300)
+if [ -n "$4" ]; then
+NIGHTEND=$4
+fi 
+
+#Check if the file /tmp/nighthosts_$2.txt exists
+if [ ! -f /tmp/nighthosts_$2.txt ]; then
+touch /tmp/nighthosts_$2.txt
+fi
+
+#Function for Printing Helptext
+function print_help {
+echo
+echo "check_client_watch usage:"
+echo
+echo "./check_client_watch [IP-SUBNET] [SUBNETNAME] [NIGHTSTART] [NIGHTEND]"
+echo
+echo "~~~DESCRIPTION~~~"
+echo
+echo "IP-SUBNETZ: range of subnet to ping in CIDR-Format e.g. 192.168.1.0/24 *REQUIRED*"
+echo "SUBNETNAME: Name of Subnet e.g. CLIENTS or WLAN *REQUIRED*"
+echo "NIGHTSTART: Time where the Nightwatch will start DEFAULT=0000 (00:00 AM) *OPTIONAL*"
+echo "NIGHTEND  : Time where the Nightwatch will end DEFAULT=0300 (03:00 AM) *OPTIONAL*"
+echo "help      : will print this Help"
+echo
+echo "EXAMPLE:"
+echo "./check_client_watch 192.168.1.0/24 Clients 0000 0300"
+echo
+exit 0
+}
+
+#Print Help
+if [[ -z "$1" ]] || [[ "$1" == "help" ]] || [[ -z "$2" ]]; then
+ print_help
+fi
+
+#Ping Subnet in $1 and output all Online Client on /tmp/check_fing_$2.txt
+fping -a -g $1 -q -r 1 > /tmp/check_client_watch_$2.txt
+
+#Count Lines of /tmp/check_client_watch_$2.txt
+OnlineClientsCount=$(cat /tmp/check_client_watch_$2.txt | wc -l )
+PERFDAT="Online_Clients=$OnlineClientsCount;"
+
+
+# Check if its Night 
+# This Check will be active form NIGHTSTART to NIGHTEND default is 00:00 - 03:00 AM (0000 <= 0300)
+# and will output it in /tmp/nighthosts_$2.txt
+if [[ $TIME_WATCH -le $NIGHTEND ]] && [[ $TIME_WATCH -ge $NIGHTSTART ]]; then
+echo > /tmp/nighthosts_$2.txt
+fi
+
+#Get all Clients form from fping
+cat /tmp/check_client_watch_$2.txt | while read LINE
+ do
+  line_hostename=""
+  line_hostname=$(host $LINE | awk '{print $5}')
+
+ if [[ $TIME_WATCH -le $NIGHTEND ]] && [[ $TIME_WATCH -ge $NIGHTSTART ]]; then
+
+ if [ $line_hostname =  $NO_DNS ]; then
+
+  #echo $LINE
+  echo $LINE >>  /tmp/nighthosts_$2.txt
+ else
+
+   #echo $line_hostname
+   echo $line_hostname >> /tmp/nighthosts_$2.txt
+
+fi
+fi
+done
+#Count Clients Online at night minus 1
+#Because one line in /tmp/nighthosts_$2.txt is empty
+NightClientsCount=$(expr $(cat /tmp/nighthosts_$2.txt | wc -l) - 1)
+ 
+echo -----------------------------------------
+echo ---------CLIENTS ONLINE AT NIGHT---------
+echo -----------------------------------------
+cat /tmp/nighthosts_$2.txt
+echo
+echo -----------------------------------------
+echo $NightClientsCount "clients online at night"
+echo -----------------------------------------
+echo -------------CLIENTS ONLINE--------------
+echo -----------------------------------------
+echo $OnlineClientsCount  "clients are online | $PERFDAT";
+
+exit 0
+
+
