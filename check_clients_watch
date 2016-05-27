@@ -43,7 +43,7 @@ echo "--exclude	: Hostnames or IPs who will be Excluded from excludefile of Clie
 echo "--help      : will print this Help"
 echo
 echo "EXAMPLE:"
-echo "./check_client_watch --net 192.168.1.0/24 --name Clients --start 0000 --end 0300"
+echo "./check_client_watch --net 192.168.1.0/24 --name Clients --start 0000 --end 0300 --warning 20 --critical 50 --exclude"
 echo
 exit 3
 }
