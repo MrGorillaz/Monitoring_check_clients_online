@@ -9,10 +9,14 @@
 
 #Vars
 PERFDAT=""
-NIGHTSTART=0000
-NIGHTEND=0300
+NIGHTSTART=1300
+NIGHTEND=1500
 SUBNET=""
 SUBNETNAME=""
+WARNING=50
+CRITICAL=100
+EXCLUDE=
+EXITCODE=""
 
 #For Clients who cant get resolved over DNS
 NO_DNS="3(NXDOMAIN)"
@@ -20,23 +24,12 @@ NO_DNS="3(NXDOMAIN)"
 #Get Time in Format HHMM e.g  1500 = 15:00 PM
 TIME_WATCH=$(date "+%H%M")
 
-#START for Clients who are Online at Night from NIGHTSTART to NIGHTEND (NIGHTSTART_Default: 00:00 AM = 0000)
-#if [ -n "$3" ]; then
-#NIGHTSTART=$3
-#fi
-
-#Limit for Clients who are Online at Night from NIGHTSTART to NIGHTEND (NIGHTEND_Default: 03:00 AM = 0300)
-#if [ -n "$4" ]; then
-#NIGHTEND=$4
-#fi 
-
-
 #Function for Printing Helptext
 function print_help {
 echo
 echo "check_client_watch usage:"
 echo
-echo "./check_client_watch --net [IP-SUBNET] --name [SUBNETNAME] --start [NIGHTSTART] --end [NIGHTEND]"
+echo "./check_client_watch --net [IP-SUBNET] --name [SUBNETNAME] --start [NIGHTSTART] --end [NIGHTEND] --critical [Value] --warning [Value] --exclude"
 echo
 echo "~~~DESCRIPTION~~~"
 echo
@@ -44,16 +37,24 @@ echo "--net	: range of subnet to ping in CIDR-Format e.g. 192.168.1.0/24 *REQUIR
 echo "--name	: Name of Subnet e.g. CLIENTS or WLAN *REQUIRED*"
 echo "--start	: Time where the Nightwatch will start DEFAULT=0000 (00:00 AM) *OPTIONAL*"
 echo "--end	: Time where the Nightwatch will end DEFAULT=0300 (03:00 AM) *OPTIONAL*"
+echo "--warning	: Value for Warning for Clients Online at NIGHT DEFAULT=50"
+echo "--critical	: Value for Critical Online at NIGHT DEFAULT=100"
+echo "--exclude	: Hostnames or IPs who will be Excluded from excludefile of Clients Online at NIGHT /tmp/exclude_hosts_$SUBNETNAME "
 echo "--help      : will print this Help"
 echo
 echo "EXAMPLE:"
 echo "./check_client_watch --net 192.168.1.0/24 --name Clients --start 0000 --end 0300"
 echo
-exit 0
+exit 3
 }
 
-
 #check script parameters
+
+if [ -z $1 ]; then
+print_help
+fi
+
+
 for ((i=1;i<=$#;i++));
 
 do
@@ -72,30 +73,43 @@ do
  elif [ ${!i} = "--help" ]
 	then ((i++))
 		print_help
+ elif [ ${!i} = "--warning" ]
+	then ((i++))
+		WARNING=${!i};
+ elif [ ${!i} = "--critical" ]
+	then ((i++))
+		CRITICAL=${!i};
+ elif [ ${!i} = "--exclude" ]
+	then ((i++))
+		EXCLUDE="true";
+
 fi
 done
 
-#Check if the file /tmp/nighthosts_$2.txt exists
+
+
+#Check if the file /tmp/nighthosts_$SUBNETNAME.txt exists
 if [ ! -f /tmp/nighthosts_$SUBNETNAME.txt ]; then
 touch /tmp/nighthosts_$SUBNETNAME.txt
 fi
 
-#Print Help
-#if [[ -z "$1" ]] || [[ "$1" == "help" ]] || [[ -z "$2" ]]; then
-# print_help
-#fi
+#Check if the file /tmp/exclude_hosts_$SUBNETNAME.txt exists
+if [ ! -f /tmp/exclude_hosts_$SUBNETNAME.txt ]; then
+touch /tmp/exclude_hosts_$SUBNETNAME.txt
+fi
 
-#Ping Subnet in $1 and output all Online Client on /tmp/check_fing_$2.txt
+
+#Ping Subnet in $1 and output all Online Client on /tmp/check_fing_$SUBNETNAME.txt
 fping -a -g $SUBNET -q -r 1 > /tmp/check_client_watch_$SUBNETNAME.txt
 
-#Count Lines of /tmp/check_client_watch_$2.txt
+#Count Lines of /tmp/check_client_watch_$SUBNETNAME.txt
 OnlineClientsCount=$(cat /tmp/check_client_watch_$SUBNETNAME.txt | wc -l )
 PERFDAT="Online_Clients=$OnlineClientsCount;"
 
 
 # Check if its Night 
 # This Check will be active form NIGHTSTART to NIGHTEND default is 00:00 - 03:00 AM (0000 <= 0300)
-# and will output it in /tmp/nighthosts_$2.txt
+# and will output it in /tmp/nighthosts_$SUBNETNAME.txt
 if [[ $TIME_WATCH -le $NIGHTEND ]] && [[ $TIME_WATCH -ge $NIGHTSTART ]]; then
 echo > /tmp/nighthosts_$SUBNETNAME.txt
 fi
@@ -120,10 +134,33 @@ cat /tmp/check_client_watch_$SUBNETNAME.txt | while read LINE
 fi
 fi
 done
-#Count Clients Online at night minus 1
-#Because one line in /tmp/nighthosts_$2.txt is empty
-NightClientsCount=$(expr $(cat /tmp/nighthosts_$SUBNETNAME.txt | wc -l) - 1)
+
+if [ ! -z $EXCLUDE ]; then
+#
+ARRAYITEMS=$(cat  /tmp/nighthosts_$SUBNETNAME.txt |tr "\n" " ")
+EXCLUDEITEMS=$(cat  /tmp/exclude_hosts_$SUBNETNAME.txt |tr "\n" " ")
+#
+for del in ${EXCLUDEITEMS[@]};
+ do
+	ARRAYITEMS=(${ARRAYITEMS[@]/$del})
+ done
  
+ #Clear the nighthosts_$SUBNETNAME.txt
+ echo > /tmp/nighthosts_$SUBNETNAME.txt
+ 
+for nighthosts in ${ARRAYITEMS[@]};
+ do
+	echo $nighthosts >> /tmp/nighthosts_$SUBNETNAME.txt
+done
+fi 
+#Count Clients Online at night minus 1
+#Because one line in /tmp/nighthosts_$SUBNETNAME.txt is empty
+NightClientsCount=$(expr $(cat /tmp/nighthosts_$SUBNETNAME.txt | wc -l) - 1)
+
+
+#Outputfunction
+
+function plugin_output {
 echo -----------------------------------------
 echo ---------CLIENTS ONLINE AT NIGHT---------
 echo -----------------------------------------
@@ -136,5 +173,28 @@ echo -------------CLIENTS ONLINE--------------
 echo -----------------------------------------
 echo $OnlineClientsCount  "clients are online | $PERFDAT";
 
-exit 0
+exit $EXITCODE
+}
+
+#OK;WARNING;CRITICAL
+
+if [ -n $WARNING ] && [ -n $CRITICAL ]; then
+
+if [ $NightClientsCount -ge $WARNING ]; then
+
+if [ $NightClientsCount -ge $CRITICAL ]; then
+	echo "CRITICAL: "  $NightClientsCount " Clients online this night" 
+	EXITCODE=2
+	plugin_output
+	
+fi
+	echo "WARNING: "  $NightClientsCount " Clients online this night"
+	EXITCODE=1
+	plugin_output
+fi
+
+	echo "OK: "  $NightClientsCount  " Clients online this night"
+	EXITCODE=0
+	plugin_output
+fi
 
