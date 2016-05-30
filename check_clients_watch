@@ -31,7 +31,7 @@ echo "check_client_watch usage:"
 echo
 echo "./check_client_watch -sn IP-SUBNET -n SUBNETNAME -s NIGHTSTART -e NIGHTEND -c VALUE -w VALUE -x"
 echo
-echo "~~~DESCRIPTION~~~"
+echo "DESCRIPTION:"
 echo
 echo "-sn or --subnet		: range of subnet to ping in CIDR-Format e.g. 192.168.1.0/24 *REQUIRED*"
 echo "-n or --name		: name of subnet e.g. CLIENTS or WLAN *REQUIRED*"
