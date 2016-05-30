@@ -3,12 +3,13 @@
 #DATE: 30.05.2016
 #Author: Alexander Orlowski
 #Description:
-#This plugin will output all clients of a subnet which are currently online
-#It will also display all clients which wore online in a specific time period
+#This Plugin will output all Clients of a Subnet which are current online
+#It will also displayed all Clients that wore online in a specific time period
 #PerformanceData will be stored for Graphite/Grafana use.
 
 #Vars
 PERFDAT=""
+PERFDAT2=""
 NIGHTSTART=1300
 NIGHTEND=1500
 SUBNET=""
@@ -31,7 +32,7 @@ echo "check_client_watch usage:"
 echo
 echo "./check_client_watch -sn IP-SUBNET -n SUBNETNAME -s NIGHTSTART -e NIGHTEND -c VALUE -w VALUE -x"
 echo
-echo "DESCRIPTION:"
+echo "~~~DESCRIPTION~~~"
 echo
 echo "-sn or --subnet		: range of subnet to ping in CIDR-Format e.g. 192.168.1.0/24 *REQUIRED*"
 echo "-n or --name		: name of subnet e.g. CLIENTS or WLAN *REQUIRED*"
@@ -157,8 +158,15 @@ fi
 #Count Clients Online at night minus 1
 #Because one line in /tmp/nighthosts_$SUBNETNAME.txt is empty
 NightClientsCount=$(expr $(cat /tmp/nighthosts_$SUBNETNAME.txt | wc -l) - 1)
+ExcludeClientsCount=$(cat /tmp/exclude_hosts_$SUBNETNAME.txt | wc -l)
+OnlineClientsExcludeCount=$(expr $OnlineClientsCount - $ExcludeClientsCount)
+
+if [ "$OnlineClientsExcludeCount" -lt "0" ]; then
+ OnlineClientsExcludeCount=0
+fi
 
 
+PERFDAT2="Online_Clients_with_Excludes=$OnlineClientsExcludeCount"
 #Outputfunction
 
 function plugin_output {
@@ -168,12 +176,12 @@ echo -----------------------------------------
 cat /tmp/nighthosts_$SUBNETNAME.txt
 echo
 echo -----------------------------------------
-echo $NightClientsCount "clients online at night"
+echo $NightClientsCount "clients online at night";
 echo -----------------------------------------
 echo -------------CLIENTS ONLINE--------------
 echo -----------------------------------------
 echo $OnlineClientsCount  "clients are online | $PERFDAT";
-
+echo $OnlineClientsExcludeCount "clients are online with excludes | $PERFDAT2";
 exit $EXITCODE
 }
 
