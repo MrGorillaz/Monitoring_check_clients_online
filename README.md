@@ -1,7 +1,7 @@
 # check_clients_online
 Nagios/Icinga Plugin to get Current Online Clients
 
-DATE: 30.05.2016
+DATE: 01.06.2016
 
 Author: Alexander Orlowski
 
