@@ -18,7 +18,7 @@ WARNING=50
 CRITICAL=100
 EXCLUDE=
 EXITCODE=""
-
+CURRENTDATE=$(date "+%x")
 #For Clients who cant get resolved over DNS
 NO_DNS="3(NXDOMAIN)"
 
@@ -127,11 +127,13 @@ cat /tmp/check_client_watch_$SUBNETNAME.txt | while read LINE
  if [ $line_hostname =  $NO_DNS ]; then
 
   #echo $LINE
-  echo $LINE >>  /tmp/nighthosts_$SUBNETNAME.txt
+ NIGHTHOST2=$(echo $LINE | cut -d. -f1,2,3,4)
+  echo $NIGHTHOST2 "  online since: $CURRENTDATE " >>  /tmp/nighthosts_$SUBNETNAME.txt
  else
 
    #echo $line_hostname
-   echo $line_hostname >> /tmp/nighthosts_$SUBNETNAME.txt
+ NIGHTHOST1=$(echo $line_hostname | cut -d. -f1,2,3)
+   echo $NIGHTHOST1 "  online since: $CURRENTDATE " >> /tmp/nighthosts_$SUBNETNAME.txt
 
 fi
 fi
@@ -206,4 +208,3 @@ fi
 	EXITCODE=0
 	plugin_output
 fi
-
