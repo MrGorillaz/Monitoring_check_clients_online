@@ -1,0 +1,19 @@
+#!/bin/bash
+#datetest
+#today=$(date "+%d%m%Y")
+today=09062016
+readarray stringarray < /tmp/nighthosts_testnetz2.txt
+arraylength=$(cat /tmp/nighthosts_testnetz2.txt | wc -l )
+> /tmp/nighthosts_testnetz2.txt
+for ((i=0;i<$arraylength;i++));
+do
+#echo $i
+checkdate=$(echo ${stringarray[$i]} | tail -c 11 | sed 's/\.//g')
+
+if [[ $checkdate < $today ]]; then
+
+echo ${stringarray[$i]}
+echo ${stringarray[$i]} >> /tmp/nighthosts_testnetz2.txt
+fi
+
+done
